@@ -54,7 +54,7 @@ set_device_profile (WpDeviceActivation *self, WpPipewireObject *device, gint ind
 }
 
 static gint
-find_active_profile (WpPipewireObject *proxy, gboolean *off)
+find_active_profile (WpPipewireObject *proxy, gboolean *off, gboolean *pro)
 {
   g_autoptr (WpIterator) profiles = NULL;
   g_auto (GValue) item = G_VALUE_INIT;
@@ -83,6 +83,8 @@ find_active_profile (WpPipewireObject *proxy, gboolean *off)
 
   if (off)
     *off = idx >= 0 && g_strcmp0 (name, "off") == 0;
+  if (pro)
+    *pro = idx >= 0 && g_strcmp0 (name, "pro-audio") == 0;
 
   return idx;
 }
@@ -182,7 +184,7 @@ find_default_profile (WpDeviceActivation *self, WpPipewireObject *proxy,
 
 static gint
 handle_active_profile (WpDeviceActivation *self, WpPipewireObject *proxy,
-    WpIterator *profiles, gboolean *changed, gboolean *off)
+    WpIterator *profiles, gboolean *changed, gboolean *off, gboolean *pro)
 {
   const gchar *dn = wp_pipewire_object_get_property (proxy, PW_KEY_DEVICE_NAME);
   gpointer active_ptr = NULL;
@@ -190,7 +192,7 @@ handle_active_profile (WpDeviceActivation *self, WpPipewireObject *proxy,
   gint local_changed = FALSE;
 
   /* Find the new active profile */
-  new_active = find_active_profile (proxy, off);
+  new_active = find_active_profile (proxy, off, pro);
   if (new_active < 0) {
     wp_info_object (self, "cannot find active profile in %s", dn);
     return new_active;
@@ -248,11 +250,18 @@ handle_enum_profiles (WpDeviceActivation *self, WpPipewireObject *proxy,
 {
   const gchar *dn = wp_pipewire_object_get_property (proxy, PW_KEY_DEVICE_NAME);
   gint active_idx = FALSE, best_idx = FALSE;
-  gboolean active_changed = FALSE, best_changed = FALSE, active_off = FALSE;
+  gboolean active_changed = FALSE, best_changed = FALSE, active_off = FALSE,
+      active_pro = FALSE;
+
+  /* Get active profile */
+  active_idx = handle_active_profile (self, proxy, profiles, &active_changed,
+      &active_off, &active_pro);
+
+  /* Do not change profiles automatically if active profile is pro-audio */
+  if (active_idx >= 0 && active_pro)
+    return;
 
   /* Set default device if active profile changed to off */
-  active_idx = handle_active_profile (self, proxy, profiles, &active_changed,
-      &active_off);
   if (active_idx >= 0 && active_changed && active_off) {
     gboolean default_avail = FALSE;
     gint default_idx = -1;
