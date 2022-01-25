@@ -184,6 +184,67 @@ node_has_available_routes (WpDefaultNodes * self, WpNode *node)
   return FALSE;
 }
 
+static gboolean
+is_headset_plugged_hack (WpDefaultNodes * self, WpDevice *device)
+{
+  g_autoptr (WpIterator) routes = NULL;
+  g_auto (GValue) val = G_VALUE_INIT;
+  routes = wp_pipewire_object_enum_params_sync (WP_PIPEWIRE_OBJECT (device),
+      "EnumRoute", NULL);
+  for (; wp_iterator_next (routes, &val); g_value_unset (&val)) {
+    WpSpaPod *route = g_value_get_boxed (&val);
+    const gchar *route_name = NULL;
+    WpDirection route_dir = WP_DIRECTION_INPUT;
+    guint32 route_avail = SPA_PARAM_AVAILABILITY_unknown;
+    g_autoptr (WpSpaPod) route_devices = NULL;
+
+    if (!wp_spa_pod_get_object (route, NULL,
+        "name", "s", &route_name,
+        "direction", "I", &route_dir,
+        "available", "?I", &route_avail,
+        "devices", "?P", &route_devices,
+        NULL))
+      continue;
+
+    if (route_name &&
+        g_strcmp0 (route_name , "analog-output-headphones") == 0 &&
+        route_dir == WP_DIRECTION_OUTPUT &&
+        route_avail != SPA_PARAM_AVAILABILITY_no)
+      return TRUE;
+  }
+
+  return FALSE;
+}
+
+static gint
+get_headset_priority_hack (WpDefaultNodes * self, WpNode *node)
+{
+  const gchar *dev_id_str = wp_pipewire_object_get_property (
+          WP_PIPEWIRE_OBJECT (node), PW_KEY_DEVICE_ID);
+  const gchar *cpd_str = wp_pipewire_object_get_property (
+          WP_PIPEWIRE_OBJECT (node), "card.profile.device");
+  gint dev_id = dev_id_str ? atoi (dev_id_str) : -1;
+  gint cpd = cpd_str ? atoi (cpd_str) : -1;
+  g_autoptr (WpDevice) device = NULL;
+
+  if (dev_id == -1 || cpd == -1)
+    return 0;
+
+  device = wp_object_manager_lookup (self->rescan_om, WP_TYPE_DEVICE,
+      WP_CONSTRAINT_TYPE_G_PROPERTY, "bound-id", "=i", dev_id, NULL);
+  if (!device)
+    return 0;
+
+  /* Card profile device values:
+   *   0 -> headset
+   *   1 -> speakers
+  */
+  if (!is_headset_plugged_hack (self, device) && cpd == 1)
+    return 500;
+
+  return 0;
+}
+
 static WpNode *
 find_best_media_class_node (WpDefaultNodes * self, const gchar *media_class,
     const gchar *node_name, WpDirection direction, gint *priority)
@@ -213,6 +274,9 @@ find_best_media_class_node (WpDefaultNodes * self, const gchar *media_class,
 
       if (!node_has_available_routes (self, node))
         continue;
+
+      /* pro-audio headset hack */
+      prio += get_headset_priority_hack (self, node);
 
       if (name && node_name && g_strcmp0 (name, node_name) == 0)
         prio += 10000;
