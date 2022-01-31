@@ -241,10 +241,10 @@ find_best_media_class_node (WpDefaultNodes * self, const gchar *media_class,
         continue;
 
       if (self->auto_echo_cancel && is_echo_cancel_node (self, node, direction))
-        prio += 10000;
+        prio += 20000;
 
       if (name && node_name && g_strcmp0 (name, node_name) == 0)
-        prio += 20000;
+        prio += 10000;
 
       if (prio > highest_prio || res == NULL) {
         highest_prio = prio;
