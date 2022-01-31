@@ -14,9 +14,9 @@ enum {
 };
 
 static const gchar * DEFAULT_KEY[N_DEFAULT_NODES] = {
-  [AUDIO_SINK] = "default.audio.sink",
-  [AUDIO_SOURCE] = "default.audio.source",
-  [VIDEO_SOURCE] = "default.video.source",
+  [AUDIO_SINK] = "wireplumber.default.audio.sink",
+  [AUDIO_SOURCE] = "wireplumber.default.audio.source",
+  [VIDEO_SOURCE] = "wireplumber.default.video.source",
 };
 
 static const gchar * NODE_TYPE_STR[N_DEFAULT_NODES] = {
