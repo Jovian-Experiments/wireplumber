@@ -23,6 +23,9 @@ function device_defaults.enable()
   -- Selects appropriate default nodes and enables saving and restoring them
   load_module("default-nodes", device_defaults.properties)
 
+  -- Expose the actual default nodes to applications
+  load_script("expose-default-nodes.lua", device_defaults.properties)
+
   -- Selects appropriate default routes ("ports" in pulseaudio terminology)
   -- and enables saving and restoring them together with
   -- their properties (per-route/port volume levels, channel maps, etc)
