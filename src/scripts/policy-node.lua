@@ -256,6 +256,14 @@ function getDefaultNode(properties, target_direction)
   return default_nodes:call("get-default-node", target_media_class)
 end
 
+function getDefaultConfiguredNodeName(properties, target_direction)
+  local target_media_class =
+        properties["media.type"] ..
+        (target_direction == "input" and "/Sink" or "/Source")
+  return default_nodes:call("get-default-configured-node-name",
+      target_media_class)
+end
+
 -- Try to locate a valid target node that was explicitly requsted by the
 -- client(node.target) or by the user(target.node)
 -- Use the target.node metadata, if config.move is enabled,
@@ -405,6 +413,12 @@ function findBestLinkable (si)
   local target_priority = 0
   local target_plugged = 0
 
+  -- get default configured node name
+  local def_conf_node_name = nil
+  if default_nodes ~= nil then
+    def_conf_node_name = getDefaultConfiguredNodeName(si_props, target_direction)
+  end
+
   for si_target in linkables_om:iterate {
     Constraint { "item.node.type", "=", "device" },
     Constraint { "item.node.direction", "=", target_direction },
@@ -418,6 +432,13 @@ function findBestLinkable (si)
         tostring(si_target_props["node.name"]),
         tostring(si_target_node_id)))
 
+    -- increase priority if default configured node name matches
+    local target_node = si_target:get_associated_proxy ("node")
+    if def_conf_node_name ~= nil and
+        def_conf_node_name == target_node.properties["node.name"] then
+      priority = priority + 10000
+    end
+
     if not canLink (si_props, si_target) then
       Log.debug("... cannot link, skip linkable")
       goto skip_linkable
@@ -427,6 +448,8 @@ function findBestLinkable (si)
       Log.debug("... does not have routes, skip linkable")
       goto skip_linkable
     end
+
+
 
     -- todo:check if this linkable(node/device) have valid routes.
 
@@ -751,16 +774,11 @@ if config.follow and default_nodes ~= nil then
   end)
 end
 
--- listen for target.node metadata changes if config.move is enabled
-if config.move then
-  metadata_om:connect("object-added", function (om, metadata)
-    metadata:connect("changed", function (m, subject, key, t, value)
-      if key == "target.node" then
-        scheduleRescan ()
-      end
-    end)
+metadata_om:connect("object-added", function (om, metadata)
+  metadata:connect("changed", function (m, subject, key, t, value)
+    scheduleRescan ()
   end)
-end
+end)
 
 linkables_om:connect("object-added", function (om, si)
   if si.properties["item.node.type"] ~= "stream" then
