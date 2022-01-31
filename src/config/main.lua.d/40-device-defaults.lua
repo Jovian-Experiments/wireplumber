@@ -46,6 +46,9 @@ function device_defaults.enable()
   -- Selects appropriate default nodes and enables saving and restoring them
   load_module("default-nodes", device_defaults.properties)
 
+  -- Expose the actual default nodes to applications
+  load_script("expose-default-nodes.lua", device_defaults.properties)
+
   -- Selects appropriate profile for devices
   load_script("policy-device-profile.lua", {
     persistent = device_defaults.persistent_profiles

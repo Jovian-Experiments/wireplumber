@@ -285,10 +285,10 @@ find_best_media_class_node (WpDefaultNodes * self, const gchar *media_class,
         continue;
 
       if (self->auto_echo_cancel && is_echo_cancel_node (self, node, direction))
-        prio += 10000;
+        prio += 20000;
 
       if (name && def->config_value && g_strcmp0 (name, def->config_value) == 0) {
-        prio += 20000 * (N_PREV_CONFIGS + 1);
+        prio += 10000 * (N_PREV_CONFIGS + 1);
       } else if (name) {
         for (gint i = 0; i < N_PREV_CONFIGS; ++i) {
           if (!def->prev_config_value[i])
@@ -296,7 +296,7 @@ find_best_media_class_node (WpDefaultNodes * self, const gchar *media_class,
 
           /* Match by name */
           if (g_strcmp0 (name, def->prev_config_value[i]) == 0) {
-            prio += (N_PREV_CONFIGS - i) * 20000;
+            prio += (N_PREV_CONFIGS - i) * 10000;
             break;
           }
         }
