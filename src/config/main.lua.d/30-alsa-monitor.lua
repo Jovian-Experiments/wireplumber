@@ -8,6 +8,10 @@ function alsa_monitor.enable()
     load_module("reserve-device")
   end
 
+  if alsa_monitor.properties["alsa.resume.reset"] then
+    load_module("login1-manager")
+  end
+
   -- The "file-monitor-api" module needs to be loaded for MIDI device monitoring
   if alsa_monitor.properties["alsa.midi.monitoring"] then
     load_module("file-monitor-api")
