@@ -89,6 +89,21 @@ shared_library(
   dependencies : [wp_dep, giounix_dep],
 )
 
+subdir('module-login1-manager')
+shared_library(
+  'wireplumber-module-login1-manager',
+  [
+    'module-login1-manager/plugin.c',
+    login1_manager_enums,
+  ],
+  c_args : [common_c_args, '-DG_LOG_DOMAIN="m-login1-manager"'],
+  include_directories: login1_manager_includes,
+  install : true,
+  install_dir : wireplumber_module_dir,
+  dependencies : [wp_dep, giounix_dep],
+)
+
+
 shared_library(
   'wireplumber-module-si-audio-adapter',
   [
