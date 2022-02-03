@@ -12,6 +12,12 @@ function alsa_monitor.enable()
     load_module("reserve-device")
   end
 
+  if alsa_monitor.properties["alsa.resume.reset"] then
+    load_module("login1-manager")
+  end
+
+  load_module("i18n")
+
   load_monitor("alsa", {
     properties = alsa_monitor.properties,
     rules = alsa_monitor.rules,
