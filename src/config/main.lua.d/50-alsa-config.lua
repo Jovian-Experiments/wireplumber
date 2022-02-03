@@ -18,6 +18,9 @@ alsa_monitor.properties = {
 
   -- Enables monitoring of alsa MIDI devices
   ["alsa.midi.monitoring"] = true,
+
+  -- Resets the alsa monitor after resuming from suspend
+  ["alsa.resume.reset"] = true,
 }
 
 alsa_monitor.rules = {

@@ -393,5 +393,19 @@ if rd_plugin then
   end)
 end
 
+-- destroy/create alsa monitor on syspend/resume if plugin is loaded
+lm_plugin = Plugin.find("login1-manager")
+if lm_plugin then
+  lm_plugin:connect("prepare-for-sleep", function (p, start)
+    if start then
+      Log.info ("Destroying ALSA monitor on system suspended...")
+      monitor = nil
+    elseif monitor == nil then
+      Log.info ("Creating ALSA monitor on system resumed...")
+      monitor = createMonitor()
+    end
+  end)
+end
+
 -- create the monitor
 monitor = createMonitor()
