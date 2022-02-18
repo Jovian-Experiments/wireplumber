@@ -576,8 +576,19 @@ function handleLinkable (si)
   local exclusive = parseBool(si_props["node.exclusive"])
   local si_must_passthrough = parseBool(si_props["item.node.encoded-only"])
 
+  local si_target = nil
+
+  -- filter-chain-capture needs to be linked to echo-cancel-source if it exists
+  if si_props["node.name"] == "filter-chain-capture" then
+    si_target = linkables_om:lookup {
+        Constraint { "node.name", "=", "echo-cancel-source" }
+    }
+  end
+
   -- find defined target
-  local si_target = findDefinedTarget(si_props)
+  if si_target == nil then
+    si_target = findDefinedTarget(si_props)
+  end
   local can_passthrough = si_target and canPassthrough(si, si_target)
 
   if si_target and si_must_passthrough and not can_passthrough then

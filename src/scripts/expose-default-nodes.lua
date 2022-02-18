@@ -95,6 +95,16 @@ function handleDefaultNode (si, id, name, media_class)
       local target_node = si_target:get_associated_proxy ("node")
       def_name = target_node.properties["node.name"]
       Log.info ("Echo cancel playback target " .. def_name)
+    elseif name == "filter-chain-sink" then
+      local si_target = getSiTarget ("echo-cancel-playback")
+      if si_target == nil then
+        local si_target = getSiTarget ("filter-chain-playback")
+        if si_target == nil then
+          return
+        end
+      end
+      def_name = target_node.properties["node.name"]
+      Log.info ("Filter chain playback target " .. def_name)
     end
     Log.info ("Setting default.audio.sink to " .. def_name)
     metadata:set(0, "default.audio.sink", "Spa:String:JSON",
@@ -108,6 +118,16 @@ function handleDefaultNode (si, id, name, media_class)
       local target_node = si_target:get_associated_proxy ("node")
       def_name = target_node.properties["node.name"]
       Log.info ("Echo cancel capture target " .. def_name)
+    elseif name == "filter-chain-source" then
+      local si_target = getSiTarget ("echo-cancel-capture")
+      if si_target == nil then
+        local si_target = getSiTarget ("filter-chain-capture")
+        if si_target == nil then
+          return
+        end
+      end
+      def_name = target_node.properties["node.name"]
+      Log.info ("Filter chain capture target " .. def_name)
     end
     Log.info ("Setting default.audio.source to " .. def_name)
     metadata:set(0, "default.audio.source", "Spa:String:JSON",
