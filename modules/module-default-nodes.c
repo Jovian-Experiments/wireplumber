@@ -19,6 +19,9 @@
 #define DEFAULT_AUTO_ECHO_CANCEL TRUE
 #define DEFAULT_ECHO_CANCEL_SINK_NAME "echo-cancel-sink"
 #define DEFAULT_ECHO_CANCEL_SOURCE_NAME "echo-cancel-source"
+#define DEFAULT_AUTO_FILTER_CHAIN TRUE
+#define DEFAULT_FILTER_CHAIN_SINK_NAME "filter-chain-sink"
+#define DEFAULT_FILTER_CHAIN_SOURCE_NAME "filter-chain-source"
 #define N_PREV_CONFIGS 16
 
 enum {
@@ -28,6 +31,9 @@ enum {
   PROP_AUTO_ECHO_CANCEL,
   PROP_ECHO_CANCEL_SINK_NAME,
   PROP_ECHO_CANCEL_SOURCE_NAME,
+  PROP_AUTO_FILTER_CHAIN,
+  PROP_FILTER_CHAIN_SINK_NAME,
+  PROP_FILTER_CHAIN_SOURCE_NAME,
 };
 
 typedef struct _WpDefaultNode WpDefaultNode;
@@ -53,6 +59,8 @@ struct _WpDefaultNodes
   gboolean use_persistent_storage;
   gboolean auto_echo_cancel;
   gchar *echo_cancel_names[2];
+  gboolean auto_filter_chain;
+  gchar *filter_chain_names[2];
 };
 
 G_DECLARE_FINAL_TYPE (WpDefaultNodes, wp_default_nodes,
@@ -251,6 +259,21 @@ is_echo_cancel_node (WpDefaultNodes * self, WpNode *node, WpDirection direction)
   return g_strcmp0 (name, self->echo_cancel_names[direction]) == 0;
 }
 
+static gboolean
+is_filter_chain_node (WpDefaultNodes * self, WpNode *node, WpDirection direction)
+{
+  const gchar *name = wp_pipewire_object_get_property (
+      WP_PIPEWIRE_OBJECT (node), PW_KEY_NODE_NAME);
+  const gchar *virtual_str = wp_pipewire_object_get_property (
+      WP_PIPEWIRE_OBJECT (node), PW_KEY_NODE_VIRTUAL);
+  gboolean virtual = virtual_str && pw_properties_parse_bool (virtual_str);
+
+  if (!name || !virtual)
+    return FALSE;
+
+  return g_strcmp0 (name, self->filter_chain_names[direction]) == 0;
+}
+
 static WpNode *
 find_best_media_class_node (WpDefaultNodes * self, const gchar *media_class,
     const WpDefaultNode *def, WpDirection direction, gint *priority)
@@ -283,6 +306,9 @@ find_best_media_class_node (WpDefaultNodes * self, const gchar *media_class,
 
       if (!node_has_available_routes (self, node))
         continue;
+
+      if (self->auto_filter_chain && is_filter_chain_node (self, node, direction))
+        prio += 30000;
 
       if (self->auto_echo_cancel && is_echo_cancel_node (self, node, direction))
         prio += 20000;
@@ -599,6 +625,17 @@ wp_default_nodes_set_property (GObject * object, guint property_id,
     g_clear_pointer (&self->echo_cancel_names[WP_DIRECTION_OUTPUT], g_free);
     self->echo_cancel_names[WP_DIRECTION_OUTPUT] = g_value_dup_string (value);
     break;
+  case PROP_AUTO_FILTER_CHAIN:
+    self->auto_filter_chain = g_value_get_boolean (value);
+    break;
+  case PROP_FILTER_CHAIN_SINK_NAME:
+    g_clear_pointer (&self->filter_chain_names[WP_DIRECTION_INPUT], g_free);
+    self->filter_chain_names[WP_DIRECTION_INPUT] = g_value_dup_string (value);
+    break;
+  case PROP_FILTER_CHAIN_SOURCE_NAME:
+    g_clear_pointer (&self->filter_chain_names[WP_DIRECTION_OUTPUT], g_free);
+    self->filter_chain_names[WP_DIRECTION_OUTPUT] = g_value_dup_string (value);
+    break;
   default:
     G_OBJECT_WARN_INVALID_PROPERTY_ID (object, property_id, pspec);
     break;
@@ -652,6 +689,21 @@ wp_default_nodes_class_init (WpDefaultNodesClass * klass)
       g_param_spec_string ("echo-cancel-source-name", "echo-cancel-source-name",
           "echo-cancel-source-name", DEFAULT_ECHO_CANCEL_SOURCE_NAME,
           G_PARAM_WRITABLE | G_PARAM_CONSTRUCT_ONLY | G_PARAM_STATIC_STRINGS));
+
+  g_object_class_install_property (object_class, PROP_AUTO_FILTER_CHAIN,
+      g_param_spec_boolean ("auto-filter-chain", "auto-filter-chain",
+          "auto-filter-chain", DEFAULT_AUTO_FILTER_CHAIN,
+          G_PARAM_WRITABLE | G_PARAM_CONSTRUCT_ONLY | G_PARAM_STATIC_STRINGS));
+
+  g_object_class_install_property (object_class, PROP_FILTER_CHAIN_SINK_NAME,
+      g_param_spec_string ("filter-chain-sink-name", "filter-chain-sink-name",
+          "filter-chain-sink-name", DEFAULT_FILTER_CHAIN_SINK_NAME,
+          G_PARAM_WRITABLE | G_PARAM_CONSTRUCT_ONLY | G_PARAM_STATIC_STRINGS));
+
+  g_object_class_install_property (object_class, PROP_FILTER_CHAIN_SOURCE_NAME,
+      g_param_spec_string ("filter-chain-source-name", "filter-chain-source-name",
+          "filter-chain-source-name", DEFAULT_FILTER_CHAIN_SOURCE_NAME,
+          G_PARAM_WRITABLE | G_PARAM_CONSTRUCT_ONLY | G_PARAM_STATIC_STRINGS));
 }
 
 WP_PLUGIN_EXPORT gboolean
@@ -662,6 +714,9 @@ wireplumber__module_init (WpCore * core, GVariant * args, GError ** error)
   gboolean auto_echo_cancel = DEFAULT_AUTO_ECHO_CANCEL;
   const gchar *echo_cancel_sink_name = DEFAULT_ECHO_CANCEL_SINK_NAME;
   const gchar *echo_cancel_source_name = DEFAULT_ECHO_CANCEL_SOURCE_NAME;
+  gboolean auto_filter_chain = DEFAULT_AUTO_FILTER_CHAIN;
+  const gchar *filter_chain_sink_name = DEFAULT_FILTER_CHAIN_SINK_NAME;
+  const gchar *filter_chain_source_name = DEFAULT_FILTER_CHAIN_SOURCE_NAME;
 
   if (args) {
     g_variant_lookup (args, "save-interval-ms", "u", &save_interval_ms);
@@ -672,6 +727,11 @@ wireplumber__module_init (WpCore * core, GVariant * args, GError ** error)
         &echo_cancel_sink_name);
     g_variant_lookup (args, "echo-cancel-source-name", "&s",
         &echo_cancel_source_name);
+    g_variant_lookup (args, "auto-filter-chain", "&s", &auto_filter_chain);
+    g_variant_lookup (args, "filter-chain-sink-name", "&s",
+        &filter_chain_sink_name);
+    g_variant_lookup (args, "filter-chain-source-name", "&s",
+        &filter_chain_source_name);
   }
 
   wp_plugin_register (g_object_new (wp_default_nodes_get_type (),
@@ -682,6 +742,9 @@ wireplumber__module_init (WpCore * core, GVariant * args, GError ** error)
           "auto-echo-cancel", auto_echo_cancel,
           "echo-cancel-sink-name", echo_cancel_sink_name,
           "echo-cancel-source-name", echo_cancel_source_name,
+          "auto-filter-chain", auto_filter_chain,
+          "filter-chain-sink-name", filter_chain_sink_name,
+          "filter-chain-source-name", filter_chain_source_name,
           NULL));
   return TRUE;
 }
