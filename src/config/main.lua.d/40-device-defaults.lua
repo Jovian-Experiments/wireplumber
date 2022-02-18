@@ -18,6 +18,16 @@ device_defaults.properties = {
 
   -- Sets the default echo-cancel-source node name to automatically switch to
   ["echo-cancel-source-name"] = "echo-cancel-source",
+
+  -- Whether to auto-switch to filter chain sink and source nodes or not
+  ["auto-filter-chain"] = true,
+
+  -- Sets the default filter-chain-sink node name to automatically switch to
+  ["filter-chain-sink-name"] = "filter-chain-sink",
+
+  -- Sets the default filter-chain-source node name to automatically switch to
+  ["filter-chain-source-name"] = "filter-chain-source",
+
 }
 
 -- Sets persistent device profiles that should never change when wireplumber is
