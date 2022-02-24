@@ -98,11 +98,12 @@ function handleDefaultNode (si, id, name, media_class)
     elseif name == "filter-chain-sink" then
       local si_target = getSiTarget ("echo-cancel-playback")
       if si_target == nil then
-        local si_target = getSiTarget ("filter-chain-playback")
+        si_target = getSiTarget ("filter-chain-playback")
         if si_target == nil then
           return
         end
       end
+      local target_node = si_target:get_associated_proxy ("node")
       def_name = target_node.properties["node.name"]
       Log.info ("Filter chain playback target " .. def_name)
     end
@@ -121,11 +122,12 @@ function handleDefaultNode (si, id, name, media_class)
     elseif name == "filter-chain-source" then
       local si_target = getSiTarget ("echo-cancel-capture")
       if si_target == nil then
-        local si_target = getSiTarget ("filter-chain-capture")
+        si_target = getSiTarget ("filter-chain-capture")
         if si_target == nil then
           return
         end
       end
+      local target_node = si_target:get_associated_proxy ("node")
       def_name = target_node.properties["node.name"]
       Log.info ("Filter chain capture target " .. def_name)
     end
