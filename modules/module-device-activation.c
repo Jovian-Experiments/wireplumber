@@ -248,12 +248,12 @@ handle_enum_profiles (WpDeviceActivation *self, WpPipewireObject *proxy,
 {
   const gchar *dn = wp_pipewire_object_get_property (proxy, PW_KEY_DEVICE_NAME);
   gint active_idx = FALSE, best_idx = FALSE;
-  gboolean active_changed = FALSE, best_changed = FALSE, active_off = FALSE;
+  gboolean active_changed = FALSE, best_changed = FALSE;
 
   /* Set default device if active profile changed to off */
   active_idx = handle_active_profile (self, proxy, profiles, &active_changed,
-      &active_off);
-  if (active_idx >= 0 && active_changed && active_off) {
+      NULL);
+  if (active_idx >= 0 && active_changed) {
     gboolean default_avail = FALSE;
     gint default_idx = -1;
     default_idx = find_default_profile (self, proxy, profiles, &default_avail);
