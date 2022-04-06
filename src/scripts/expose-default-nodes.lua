@@ -89,23 +89,21 @@ function handleDefaultNode (si, id, name, media_class)
   if media_class == "Audio/Sink" then
     if name == "echo-cancel-sink" then
       local si_target = getSiTarget ("echo-cancel-playback")
-      if si_target == nil then
-        return
+      if si_target then
+        local target_node = si_target:get_associated_proxy ("node")
+        def_name = target_node.properties["node.name"]
+        Log.info ("Echo cancel playback target " .. def_name)
       end
-      local target_node = si_target:get_associated_proxy ("node")
-      def_name = target_node.properties["node.name"]
-      Log.info ("Echo cancel playback target " .. def_name)
     elseif name == "filter-chain-sink" then
       local si_target = getSiTarget ("echo-cancel-playback")
       if si_target == nil then
         si_target = getSiTarget ("filter-chain-playback")
-        if si_target == nil then
-          return
-        end
       end
-      local target_node = si_target:get_associated_proxy ("node")
-      def_name = target_node.properties["node.name"]
-      Log.info ("Filter chain playback target " .. def_name)
+      if si_target then
+        local target_node = si_target:get_associated_proxy ("node")
+        def_name = target_node.properties["node.name"]
+        Log.info ("Filter chain playback target " .. def_name)
+      end
     end
     Log.info ("Setting default.audio.sink to " .. def_name)
     metadata:set(0, "default.audio.sink", "Spa:String:JSON",
@@ -113,23 +111,21 @@ function handleDefaultNode (si, id, name, media_class)
   elseif media_class == "Audio/Source" then
     if name == "echo-cancel-source" then
       local si_target = getSiTarget ("echo-cancel-capture")
-      if si_target == nil then
-        return
+      if si_target then
+        local target_node = si_target:get_associated_proxy ("node")
+        def_name = target_node.properties["node.name"]
+        Log.info ("Echo cancel capture target " .. def_name)
       end
-      local target_node = si_target:get_associated_proxy ("node")
-      def_name = target_node.properties["node.name"]
-      Log.info ("Echo cancel capture target " .. def_name)
     elseif name == "filter-chain-source" then
       local si_target = getSiTarget ("echo-cancel-capture")
       if si_target == nil then
         si_target = getSiTarget ("filter-chain-capture")
-        if si_target == nil then
-          return
-        end
       end
-      local target_node = si_target:get_associated_proxy ("node")
-      def_name = target_node.properties["node.name"]
-      Log.info ("Filter chain capture target " .. def_name)
+      if si_target then
+        local target_node = si_target:get_associated_proxy ("node")
+        def_name = target_node.properties["node.name"]
+        Log.info ("Filter chain capture target " .. def_name)
+      end
     end
     Log.info ("Setting default.audio.source to " .. def_name)
     metadata:set(0, "default.audio.source", "Spa:String:JSON",
