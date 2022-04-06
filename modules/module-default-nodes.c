@@ -232,7 +232,8 @@ is_filter_chain_node (WpDefaultNodes * self, WpNode *node, WpDirection direction
 
 static WpNode *
 find_best_media_class_node (WpDefaultNodes * self, const gchar *media_class,
-    const gchar *node_name, WpDirection direction, gint *priority)
+    const gchar *node_name, WpDirection direction, gint *priority,
+    gboolean ignore_filters)
 {
   g_autoptr (WpIterator) it = NULL;
   g_auto (GValue) val = G_VALUE_INIT;
@@ -260,6 +261,12 @@ find_best_media_class_node (WpDefaultNodes * self, const gchar *media_class,
       if (!node_has_available_routes (self, node))
         continue;
 
+      /* skip echo cancel and filter chain nodes if ignore filters is true */
+      if (ignore_filters &&
+          ((g_strcmp0 (name, self->filter_chain_names[direction]) == 0) ||
+          (g_strcmp0 (name, self->echo_cancel_names[direction]) == 0)))
+        continue;
+
       if (self->auto_filter_chain && is_filter_chain_node (self, node, direction))
         prio += 30000;
 
@@ -283,14 +290,15 @@ find_best_media_class_node (WpDefaultNodes * self, const gchar *media_class,
 
 static WpNode *
 find_best_media_classes_node (WpDefaultNodes * self,
-    const gchar **media_classes, const gchar *node_name, WpDirection direction)
+    const gchar **media_classes, const gchar *node_name, WpDirection direction,
+    gboolean ignore_filters)
 {
   gint highest_prio = -1;
   WpNode *res = NULL;
   for (guint i = 0; media_classes[i]; i++) {
     gint prio = -1;
     WpNode *node = find_best_media_class_node (self, media_classes[i],
-        node_name, direction, &prio);
+        node_name, direction, &prio, ignore_filters);
     if (node && (!res || prio > highest_prio)) {
       highest_prio = prio;
       res = node;
@@ -300,7 +308,7 @@ find_best_media_classes_node (WpDefaultNodes * self,
 }
 
 static WpNode *
-find_best_node (WpDefaultNodes * self, gint node_t)
+find_best_node (WpDefaultNodes * self, gint node_t, gboolean ignore_filters)
 {
   const gchar *name = self->defaults[node_t].config_value;
 
@@ -311,7 +319,7 @@ find_best_node (WpDefaultNodes * self, gint node_t)
         "Audio/Duplex",
         NULL};
     return find_best_media_classes_node (self, media_classes, name,
-        WP_DIRECTION_INPUT);
+        WP_DIRECTION_INPUT, ignore_filters);
   }
   case AUDIO_SOURCE: {
     const gchar *media_classes[] = {
@@ -321,7 +329,7 @@ find_best_node (WpDefaultNodes * self, gint node_t)
         "Audio/Sink",
         NULL};
     return find_best_media_classes_node (self, media_classes, name,
-        WP_DIRECTION_OUTPUT);
+        WP_DIRECTION_OUTPUT, ignore_filters);
   }
   case VIDEO_SOURCE: {
     const gchar *media_classes[] = {
@@ -329,7 +337,7 @@ find_best_node (WpDefaultNodes * self, gint node_t)
         "Video/Source/Virtual",
         NULL};
     return find_best_media_classes_node (self, media_classes, name,
-        WP_DIRECTION_OUTPUT);
+        WP_DIRECTION_OUTPUT, ignore_filters);
   }
   default:
     break;
@@ -339,13 +347,14 @@ find_best_node (WpDefaultNodes * self, gint node_t)
 }
 
 static void
-reevaluate_default_node (WpDefaultNodes * self, WpMetadata *m, gint node_t)
+reevaluate_default_node (WpDefaultNodes * self, WpMetadata *m, gint node_t,
+    gboolean ignore_filters)
 {
   WpNode *node = NULL;
   const gchar *node_name = NULL;
   gchar buf[1024];
 
-  node = find_best_node (self, node_t);
+  node = find_best_node (self, node_t, ignore_filters);
   if (node)
     node_name = wp_pipewire_object_get_property (WP_PIPEWIRE_OBJECT (node),
         PW_KEY_NODE_NAME);
@@ -498,11 +507,34 @@ nodes_ready (WpDefaultNodes * self)
   return TRUE;
 }
 
+static gboolean
+has_application_capture_stream (WpDefaultNodes * self)
+{
+  g_autoptr (WpIterator) it = NULL;
+  g_auto (GValue) val = G_VALUE_INIT;
+
+  it = wp_object_manager_new_filtered_iterator (self->rescan_om, WP_TYPE_NODE,
+      WP_CONSTRAINT_TYPE_PW_PROPERTY,
+      PW_KEY_MEDIA_CLASS, "=s", "Stream/Input/Audio",
+      NULL);
+  for (; wp_iterator_next (it, &val); g_value_unset (&val)) {
+    WpPipewireObject *node = g_value_get_object (&val);
+    const gchar *virtual_str = wp_pipewire_object_get_property (
+        WP_PIPEWIRE_OBJECT (node), PW_KEY_NODE_VIRTUAL);
+    gboolean virtual = virtual_str && pw_properties_parse_bool (virtual_str);
+    if (!virtual)
+      return TRUE;
+  }
+
+  return FALSE;
+}
+
 static void
 sync_rescan (WpCore * core, GAsyncResult * res, WpDefaultNodes * self)
 {
   g_autoptr (WpMetadata) metadata = NULL;
   g_autoptr (GError) error = NULL;
+  gboolean ignore_filters = FALSE;
 
   if (!wp_core_sync_finish (core, res, &error)) {
     wp_warning_object (self, "core sync error: %s", error->message);
@@ -519,10 +551,13 @@ sync_rescan (WpCore * core, GAsyncResult * res, WpDefaultNodes * self)
   if (!nodes_ready (self))
     return;
 
+  /* We ignore filters if there is no audio capture stream node */
+  ignore_filters = !has_application_capture_stream (self);
+
   wp_trace_object (self, "re-evaluating defaults");
-  reevaluate_default_node (self, metadata, AUDIO_SINK);
-  reevaluate_default_node (self, metadata, AUDIO_SOURCE);
-  reevaluate_default_node (self, metadata, VIDEO_SOURCE);
+  reevaluate_default_node (self, metadata, AUDIO_SINK, ignore_filters);
+  reevaluate_default_node (self, metadata, AUDIO_SOURCE, ignore_filters);
+  reevaluate_default_node (self, metadata, VIDEO_SOURCE, ignore_filters);
 }
 
 static void
