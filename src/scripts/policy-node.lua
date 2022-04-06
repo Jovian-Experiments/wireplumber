@@ -465,6 +465,15 @@ function findBestLinkable (si)
         tostring(si_target_props["node.name"]),
         tostring(si_target_node_id)))
 
+    -- The echo-cancel-capture and echo-cancel-playback nodes should never be
+    -- linked with filter-chain-source and filter-chain-sink respectively
+    if (si_props["node.name"] == "echo-cancel-capture" and
+        si_target_props["node.name"] == "filter-chain-source") or
+        (si_props["node.name"] == "echo-cancel-playback" and
+        si_target_props["node.name"] == "filter-chain-sink") then
+      goto skip_linkable
+    end
+
     -- increase priority if default configured node name matches
     local target_node = si_target:get_associated_proxy ("node")
     if def_conf_node_name ~= nil and
@@ -579,6 +588,37 @@ function checkLinkable(si, handle_nonstreams)
   return true, si_props
 end
 
+function hasRealAudioInputStream (om)
+  for linkable in om:iterate {
+    Constraint { "item.node.type", "=", "stream" },
+    Constraint { "item.node.direction", "=", "input" },
+    Constraint { "media.type", "=", "Audio" },
+  } do
+    local node = linkable:get_associated_proxy ("node")
+    local virtual = parseBool(node.properties["node.virtual"])
+    if not virtual then
+      return true
+    end
+  end
+
+  return false
+end
+
+function checkFilter(si, si_props)
+  local si_node_name = si_props["node.name"]
+
+  -- ignore filter nodes if there is no real audio input stream
+  if si_node_name == "filter-chain-capture" or
+      si_node_name == "filter-chain-playback" or
+      si_node_name == "echo-cancel-capture" or
+      si_node_name == "echo-cancel-playback" then
+    return hasRealAudioInputStream (linkables_om) or
+        hasRealAudioInputStream (pending_linkables_om)
+  end
+
+  return true
+end
+
 si_flags = {}
 
 function checkPending ()
@@ -657,6 +697,11 @@ function handleLinkable (si)
 
   local valid, si_props = checkLinkable(si)
   if not valid then
+    return
+  end
+
+  -- check if we need to handle echo cancel and filter chain nodes
+  if not checkFilter(si, si_props) then
     return
   end
 
@@ -801,14 +846,25 @@ function handleLinkable (si)
   end
 end
 
+function unhandleLinkableByNodeName (node_name)
+  local si = linkables_om:lookup {
+    Constraint { "node.name", "=", node_name } }
+  if si == nil then
+    return
+  end
+
+  unhandleLinkable(si)
+end
+
 function unhandleLinkable (si)
   local valid, si_props = checkLinkable(si, true)
   if not valid then
     return
   end
 
+  local node_name = si_props["node.name"]
   Log.info (si, string.format("unhandling item: %s (%s)",
-      tostring(si_props["node.name"]), tostring(si_props["node.id"])))
+      tostring(node_name), tostring(si_props["node.id"])))
 
   -- remove any links associated with this item
   for silink in links_om:iterate() do
@@ -828,6 +884,20 @@ function unhandleLinkable (si)
   end
 
   si_flags[si.id] = nil
+
+  -- also unhandle filters if there is no real audio input stream
+  if not hasRealAudioInputStream (linkables_om) and
+      not hasRealAudioInputStream (pending_linkables_om) and
+      node_name ~= "filter-chain-capture" and
+      node_name ~= "filter-chain-playback" and
+      node_name ~= "echo-cancel-capture" and
+      node_name ~= "echo-cancel-playback" then
+    unhandleLinkableByNodeName ("filter-chain-capture")
+    unhandleLinkableByNodeName ("filter-chain-playback")
+    unhandleLinkableByNodeName ("echo-cancel-capture")
+    unhandleLinkableByNodeName ("echo-cancel-playback")
+  end
+
 end
 
 default_nodes = Plugin.find("default-nodes-api")
@@ -982,11 +1052,7 @@ linkables_om:connect("object-added", function (om, si)
     checkFiltersPortsState (si)
   end
 
-  if si_props["item.node.type"] ~= "stream" then
-    scheduleRescan ()
-  else
-    handleLinkable (si)
-  end
+  scheduleRescan ()
 end)
 
 linkables_om:connect("object-removed", function (om, si)
