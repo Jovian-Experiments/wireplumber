@@ -5,7 +5,7 @@ stream_defaults.properties = {
   ["restore-props"] = true,
 
   -- whether to restore the last stream target or not
-  ["restore-target"] = true,
+  ["restore-target"] = false,
 }
 
 stream_defaults.rules = {
