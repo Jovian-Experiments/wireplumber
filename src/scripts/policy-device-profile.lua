@@ -184,8 +184,7 @@ function handleProfiles (device, new_device)
   end
 
   -- Set default device if active profile changed to off
-  if active_changed and self.active_profiles[dev_id] ~= nil and
-      self.active_profiles[dev_id].name == "off" then
+  if active_changed and self.active_profiles[dev_id] ~= nil then
     if def_profile ~= nil then
       if def_profile.available == "no" then
         Log.info ("Default profile " .. def_profile.name .. " unavailable for " .. dev_name)
