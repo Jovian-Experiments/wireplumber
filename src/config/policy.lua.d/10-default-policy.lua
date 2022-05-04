@@ -9,7 +9,7 @@ default_policy.policy = {
   -- Whether to forward the ports format of filter stream nodes to their
   -- associated filter device nodes. This is needed for application to stream
   -- surround audio if echo-cancel is enabled.
-  ["filter.forward-format"] = false,
+  ["filter.forward-format"] = true,
 
   -- Set to 'true' to disable channel splitting & merging on nodes and enable
   -- passthrough of audio in the same format as the format of the device.
