@@ -76,6 +76,17 @@ shared_library(
 )
 
 shared_library(
+  'wireplumber-module-login1-manager',
+  [
+    'module-login1-manager.c',
+  ],
+  c_args : [common_c_args, '-DG_LOG_DOMAIN="m-login1-manager"'],
+  install : true,
+  install_dir : wireplumber_module_dir,
+  dependencies : [wp_dep],
+)
+
+shared_library(
   'wireplumber-module-si-audio-adapter',
   [
     'module-si-audio-adapter.c',
