@@ -16,6 +16,9 @@ use_persistent_storage = config["use-persistent-storage"] or false
 -- the default volume to apply
 default_volume = tonumber(config["default-volume"] or 0.4)
 
+-- the default resume mute timeout
+resume_mute_timeout = tonumber(config["resume-mute-timeout"] or 10)
+
 -- table of device info
 dev_infos = {}
 
@@ -473,5 +476,78 @@ om:connect("objects-changed", function (om)
   -- replace list to get rid of dev_info for devices that no longer exist
   dev_infos = new_dev_infos
 end)
+
+nodes_om = ObjectManager {
+  Interest {
+    type = "node",
+    Constraint { "media.class", "equals", "Audio/Sink", type = "pw-global" },
+    Constraint { "device.api", "equals", "alsa", type = "pw" },
+  },
+}
+
+function setRouteMute (device, route, mute)
+  local param = Pod.Object {
+    "Spa:Pod:Object:Param:Route", "Route",
+    index = route.index,
+    device = route.device,
+    props = Pod.Object {
+      "Spa:Pod:Object:Param:Props", "Route",
+      mute = mute,
+    },
+    save = false,
+  }
+  Log.info (device, "Setting mute to " .. tostring(mute) .. " on route " .. route.name)
+  device:set_param("Route", param)
+end
+
+muted_devices = {}
+login1_manager = Plugin.find("login1-manager")
+if login1_manager then
+  login1_manager:connect ("prepare-for-sleep", function (p, start)
+    Core.sync (function (c)
+      -- Only mute/unmute alsa devices on suspend/resume if there isn't any
+      -- alsa sink node running
+      for node in nodes_om:iterate() do
+        local state, _ = node:get_state ()
+        if state == "running" then
+          return
+        end
+      end
+
+      if start == true then
+        -- Suspending, mute all the device output routes
+        for device in om:iterate() do
+          if device.properties["device.api"] == "alsa" then
+            for p in device:iterate_params("Route") do
+              local route = parseParam(p, "Route")
+              if route and
+                  route.direction == "Output" and
+                  not route.props.properties.mute then
+                setRouteMute (device, route, true)
+              end
+            end
+            table.insert (muted_devices, device)
+          end
+
+        end
+      else
+        -- Resuming, unmute all the previously muted device output routes
+        Core.timeout_add(resume_mute_timeout * 1000, function()
+          for _, device in ipairs(muted_devices) do
+            for p in device:iterate_params("Route") do
+              local route = parseParam(p, "Route")
+              if route and route.direction == "Output" then
+                setRouteMute (device, route, false)
+              end
+            end
+          end
+          muted_devices = {}
+        end)
+      end
+    end)
+  end)
+end
+
+nodes_om:activate()
 
 om:activate()

@@ -28,6 +28,9 @@ device_defaults.properties = {
   -- Sets the default filter-chain-source node name to automatically switch to
   ["filter-chain-source-name"] = "filter-chain-source",
 
+  -- Sets the timeout in seconds when the output alsa routes will be unmuted
+  -- after resuming
+  ["resume-mute-timeout"] = 10,
 }
 
 -- Sets persistent device profiles that should never change when wireplumber is
@@ -54,6 +57,12 @@ function device_defaults.enable()
 
   -- Selects appropriate default nodes and enables saving and restoring them
   load_module("default-nodes", device_defaults.properties)
+
+  -- API to listen for suspend/resume signals, needed to mute/unmute alsa
+  -- output routes on suspend/resume if alsa sink nodes are not running. This
+  -- Useful when we want to temporary mute alsa output if bluetooth device is
+  -- being used when resuming
+  load_module("login1-manager")
 
   -- Expose the actual default nodes to applications
   load_script("expose-default-nodes.lua", device_defaults.properties)
