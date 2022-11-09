@@ -168,11 +168,39 @@ function canPassthrough (si, si_target)
   return false
 end
 
+function isCorrectFilterTarget (si_props, si_target)
+  local si_target_props = si_target.properties
+
+  -- The echo-cancel-capture and echo-cancel-playback nodes should never be
+  -- linked with filter-chain-source and filter-chain-sink respectively
+  if (si_props["node.name"] == "echo-cancel-capture" and
+      si_target_props["node.name"] == "filter-chain-source") or
+      (si_props["node.name"] == "echo-cancel-playback" and
+      si_target_props["node.name"] == "filter-chain-sink") then
+    return false
+  end
+
+  -- The echo-cancel-capture and filter-chain-capture nodes should never be
+  -- linked with output.virtual-source (Audio/Source)
+  if (si_props["node.name"] == "echo-cancel-capture" or
+      si_props["node.name"] == "filter-chain-capture") and
+      si_target_props["node.name"] == "output.virtual-source" then
+    return false
+  end
+
+  return true
+end
+
 function canLink (properties, si_target)
   local target_properties = si_target.properties
 
   -- nodes must have the same media type
   if properties["media.type"] ~= target_properties["media.type"] then
+    return false
+  end
+
+  -- make sure the target is correct for specific filters
+  if not isCorrectFilterTarget (properties, si_target) then
     return false
   end
 
@@ -466,15 +494,6 @@ function findBestLinkable (si)
         tostring(si_target_props["node.name"]),
         tostring(si_target_node_id)))
 
-    -- The echo-cancel-capture and echo-cancel-playback nodes should never be
-    -- linked with filter-chain-source and filter-chain-sink respectively
-    if (si_props["node.name"] == "echo-cancel-capture" and
-        si_target_props["node.name"] == "filter-chain-source") or
-        (si_props["node.name"] == "echo-cancel-playback" and
-        si_target_props["node.name"] == "filter-chain-sink") then
-      goto skip_linkable
-    end
-
     -- increase priority if default configured node name matches
     local target_node = si_target:get_associated_proxy ("node")
     if def_conf_node_name ~= nil and
@@ -691,6 +710,45 @@ function checkFollowDefault (si, si_target, has_node_defined_target)
   end
 end
 
+function findFilterTarget (si_props)
+  -- filter-chain-capture needs to be linked to echo-cancel-source if it exists
+  if si_props["node.name"] == "filter-chain-capture" then
+    return linkables_om:lookup {
+        Constraint { "node.name", "=", "echo-cancel-source" }
+    }
+  end
+
+  -- input.virtual-source needs to be linked to filter-chain-source or
+  -- echo-cancel-source if their respective streams are linked
+  if si_props["node.name"] == "input.virtual-source" then
+    local fc_capture = linkables_om:lookup {
+        Constraint { "node.name", "=", "filter-chain-capture" }
+    }
+    if fc_capture ~= nil then
+      local linked, _ = isLinked(fc_capture)
+      if linked then
+        return linkables_om:lookup {
+            Constraint { "node.name", "=", "filter-chain-source" }
+        }
+      end
+    else
+      local ec_capture = linkables_om:lookup {
+        Constraint { "node.name", "=", "echo-cancel-capture" }
+      }
+      if ec_capture ~= nil then
+        local linked, _ = isLinked(ec_capture)
+        if linked then
+          return linkables_om:lookup {
+              Constraint { "node.name", "=", "echo-cancel-source" }
+          }
+        end
+      end
+    end
+  end
+
+  return nil
+end
+
 function handleLinkable (si)
   if checkPending () then
     return
@@ -727,12 +785,8 @@ function handleLinkable (si)
   local has_defined_target = false
   local has_node_defined_target = false
 
-  -- filter-chain-capture needs to be linked to echo-cancel-source if it exists
-  if si_props["node.name"] == "filter-chain-capture" then
-    si_target = linkables_om:lookup {
-        Constraint { "node.name", "=", "echo-cancel-source" }
-    }
-  end
+  -- find the specific filter target
+  si_target = findFilterTarget (si_props)
 
   -- find defined target
   if si_target == nil then
