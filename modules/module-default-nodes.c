@@ -290,6 +290,22 @@ is_virtual_source (WpDefaultNodes * self, WpNode *node, WpDirection direction)
       direction == WP_DIRECTION_OUTPUT;
 }
 
+static gboolean
+is_virtual_sink (WpDefaultNodes * self, WpNode *node, WpDirection direction)
+{
+  const gchar *name = wp_pipewire_object_get_property (
+      WP_PIPEWIRE_OBJECT (node), PW_KEY_NODE_NAME);
+  const gchar *virtual_str = wp_pipewire_object_get_property (
+      WP_PIPEWIRE_OBJECT (node), PW_KEY_NODE_VIRTUAL);
+  gboolean virtual = virtual_str && pw_properties_parse_bool (virtual_str);
+
+  if (!name || !virtual)
+    return FALSE;
+
+  return g_strcmp0 (name, "input.virtual-sink") == 0 &&
+      direction == WP_DIRECTION_INPUT;
+}
+
 static WpNode *
 find_best_media_class_node (WpDefaultNodes * self, const gchar *media_class,
     const WpDefaultNode *def, WpDirection direction, gint *priority,
@@ -324,13 +340,21 @@ find_best_media_class_node (WpDefaultNodes * self, const gchar *media_class,
       if (!node_has_available_routes (self, node))
         continue;
 
-      /* skip echo cancel and filter chain nodes if ignore filters is true */
+      /* Always ignore echo cancel nodes if ignore_filters */
       if (ignore_filters &&
-          ((g_strcmp0 (name, self->filter_chain_names[direction]) == 0) ||
-          (g_strcmp0 (name, self->echo_cancel_names[direction]) == 0)))
+          g_strcmp0 (name, self->echo_cancel_names[direction]) == 0)
         continue;
 
-      if (is_virtual_source (self, node, direction))
+      /* Always ignore filter chain nodes if ignore_filters and direction is
+       * output. This saves CPU by avoiding cancelling audio when no clients are
+       * capturing from input devices */
+      if (ignore_filters &&
+          direction == WP_DIRECTION_OUTPUT &&
+          g_strcmp0 (name, self->filter_chain_names[direction]) == 0)
+        continue;
+
+      if (is_virtual_source (self, node, direction) ||
+          is_virtual_sink (self, node, direction))
         prio += 40000;
 
       if (self->auto_filter_chain && is_filter_chain_node (self, node, direction))

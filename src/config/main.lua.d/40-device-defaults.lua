@@ -24,11 +24,10 @@ device_defaults.properties = {
   ["auto-filter-chain"] = true,
 
   -- Sets the default filter-chain-sink node name to automatically switch to
-  ["filter-chain-sink-name"] = "filter-chain-sink",
+  ["filter-chain-sink-name"] = "output-filter-chain-sink",
 
   -- Sets the default filter-chain-source node name to automatically switch to
   ["filter-chain-source-name"] = "filter-chain-source",
-
 }
 
 -- Sets persistent device profiles that should never change when wireplumber is

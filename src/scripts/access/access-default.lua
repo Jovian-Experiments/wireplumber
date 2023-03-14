@@ -60,7 +60,8 @@ clients_om:connect("object-added", function (om, client)
           node_properties["node.name"] == "filter-chain-source" or
           node_properties["node.name"] == "filter-chain-playback" or
           node_properties["node.name"] == "filter-chain-capture" or
-          node_properties["node.name"] == "input.virtual-source" then
+          node_properties["node.name"] == "input.virtual-source" or
+          node_properties["node.name"] == "output.virtual-sink" then
         Log.info (client, "Removing permissions to client " .. id .. " in node " .. node_id)
         perms_table[node_id] = ""
       end

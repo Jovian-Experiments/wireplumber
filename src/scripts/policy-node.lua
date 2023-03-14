@@ -188,6 +188,23 @@ function isCorrectFilterTarget (si_props, si_target)
     return false
   end
 
+  -- The echo-cancel-playback and filter-chain-playback nodes should never be
+  -- linked with input.virtual-sink (Audio/Sink)
+  if (si_props["node.name"] == "echo-cancel-playback" or
+      si_props["node.name"] == "filter-chain-playback") and
+      si_target_props["node.name"] == "input.virtual-sink" then
+    return false
+  end
+
+  -- The echo-cancel-sink node if it is a monitor should never be linked with
+  -- filter-chain-sink or input.virtual-sink (Audio/Sink)
+  if si_props["node.name"] == "echo-cancel-sink" and
+      parseBool(si_props["stream.monitor"]) and
+      (si_target_props["node.name"] == "filter-chain-sink" or
+      si_target_props["node.name"] == "input.virtual-sink") then
+    return false
+  end
+
   return true
 end
 
@@ -629,7 +646,6 @@ function checkFilter(si, si_props)
 
   -- ignore filter nodes if there is no real audio input stream
   if si_node_name == "filter-chain-capture" or
-      si_node_name == "filter-chain-playback" or
       si_node_name == "echo-cancel-capture" or
       si_node_name == "echo-cancel-playback" then
     return hasRealAudioInputStream (linkables_om) or
@@ -740,6 +756,34 @@ function findFilterTarget (si_props)
         if linked then
           return linkables_om:lookup {
               Constraint { "node.name", "=", "echo-cancel-source" }
+          }
+        end
+      end
+    end
+  end
+
+  -- output.virtual-sink needs to be linked to filter-chain-source or
+  -- echo-cancel-sink if their respective streams are linked
+  if si_props["node.name"] == "output.virtual-sink" then
+    local fc_playback = linkables_om:lookup {
+        Constraint { "node.name", "=", "filter-chain-playback" }
+    }
+    if fc_playback ~= nil then
+      local linked, _ = isLinked(fc_playback)
+      if linked then
+        return linkables_om:lookup {
+            Constraint { "node.name", "=", "filter-chain-sink" }
+        }
+      end
+    else
+      local ec_playback = linkables_om:lookup {
+        Constraint { "node.name", "=", "echo-cancel-playback" }
+      }
+      if ec_playback ~= nil then
+        local linked, _ = isLinked(ec_playback)
+        if linked then
+          return linkables_om:lookup {
+              Constraint { "node.name", "=", "echo-cancel-sink" }
           }
         end
       end
@@ -945,11 +989,9 @@ function unhandleLinkable (si)
   if not hasRealAudioInputStream (linkables_om) and
       not hasRealAudioInputStream (pending_linkables_om) and
       node_name ~= "filter-chain-capture" and
-      node_name ~= "filter-chain-playback" and
       node_name ~= "echo-cancel-capture" and
       node_name ~= "echo-cancel-playback" then
     unhandleLinkableByNodeName ("filter-chain-capture")
-    unhandleLinkableByNodeName ("filter-chain-playback")
     unhandleLinkableByNodeName ("echo-cancel-capture")
     unhandleLinkableByNodeName ("echo-cancel-playback")
   end
