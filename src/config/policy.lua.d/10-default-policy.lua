@@ -57,6 +57,10 @@ function default_policy.enable()
   -- API to access default nodes from scripts
   load_module("default-nodes-api")
 
+  -- API to access filters from scripts
+  load_script("filters-metadata.lua", default_policy.filters)
+  load_module("filters-api")
+
   -- API to access mixer controls, needed for volume ducking
   load_module("mixer-api")
 
