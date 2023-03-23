@@ -1,6 +1,5 @@
 -- uncomment to enable automatic filters policy logic
 --
---[[
 
 default_policy.filters = {
   -- The sink filters configuration
@@ -57,12 +56,12 @@ default_policy.filters = {
   ["groups-target"] = {
     ["speakers"] = {
       ["media.class"] = "Audio/Sink",
-      ["alsa.card_name"] = "my-speakers-card-name",
+      ["alsa.card_name"] = "acp5x",
+      ["device.profile.description"] = "Speaker"
     },
     ["microphone"] = {
       ["media.class"] = "Audio/Source",
-      ["alsa.card_name"] = "my-microphone-card-name"
+      ["alsa.card_name"] = "acp5x"
     }
   }
 }
---]]
