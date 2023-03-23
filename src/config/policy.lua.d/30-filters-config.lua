@@ -1,6 +1,5 @@
 -- uncomment to enable automatic filters policy logic
 --
---[[
 
 -- The default filter metadata configuration when wireplumber starts. These
 -- values can change at runtime if the filters metadata changes.
@@ -59,11 +58,12 @@ default_policy.filters_metadata = {
   ["groups-target"] = {
     ["speakers"] = {
       ["media.class"] = "Audio/Sink",
-      ["alsa.card_name"] = "my-speakers-card-name",
+      ["alsa.card_name"] = "acp5x",
+      ["device.profile.description"] = "Speaker"
     },
     ["microphone"] = {
       ["media.class"] = "Audio/Source",
-      ["alsa.card_name"] = "my-microphone-card-name"
+      ["alsa.card_name"] = "acp5x"
     }
   }
 }
@@ -80,4 +80,3 @@ default_policy.disable_filters = {
     "filter-chain-source"
   }
 }
---]]
