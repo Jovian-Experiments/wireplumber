@@ -67,4 +67,17 @@ default_policy.filters_metadata = {
     }
   }
 }
+
+-- The node-name of the filters that will be automatically disabled if there is
+-- no clients that capture audio (useful when we want to save CPU usage if
+-- echo-cancel is enabled but no clients are capturing audio).
+default_policy.disable_filters = {
+  ["sink-filters"] = {
+    "echo-cancel-sink"
+  },
+  ["source-filters"] = {
+    "echo-cancel-source",
+    "filter-chain-source"
+  }
+}
 --]]
