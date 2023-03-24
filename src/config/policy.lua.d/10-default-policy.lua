@@ -59,6 +59,7 @@ function default_policy.enable()
 
   -- API to access filters from scripts
   load_script("filters-metadata.lua", default_policy.filters_metadata)
+  load_script("disable-filters.lua", default_policy.disable_filters)
   load_module("filters-api")
 
   -- API to access mixer controls, needed for volume ducking
