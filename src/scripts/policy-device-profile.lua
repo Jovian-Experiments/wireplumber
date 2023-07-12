@@ -9,30 +9,30 @@ local self = {}
 self.config = ... or {}
 self.config.persistent = self.config.persistent or {}
 self.active_profiles = {}
-self.default_profile_plugin = Plugin.find("default-profile")
+self.default_profile_plugin = Plugin.find ("default-profile")
 
 -- Preprocess persisten profiles and create Interest objects
-for _, p in ipairs(self.config.persistent or {}) do
+for _, p in ipairs (self.config.persistent or {}) do
   p.interests = {}
-  for _, i in ipairs(p.matches) do
+  for _, i in ipairs (p.matches) do
     local interest_desc = { type = "properties" }
-    for _, c in ipairs(i) do
+    for _, c in ipairs (i) do
       c.type = "pw"
-      table.insert(interest_desc, Constraint(c))
+      table.insert (interest_desc, Constraint (c))
     end
-    local interest = Interest(interest_desc)
-    table.insert(p.interests, interest)
+    local interest = Interest (interest_desc)
+    table.insert (p.interests, interest)
   end
   p.matches = nil
 end
 
 -- Checks whether a device profile is persistent or not
-function isProfilePersistent(device_props, profile_name)
-  for _, p in ipairs(self.config.persistent or {}) do
+function isProfilePersistent (device_props, profile_name)
+  for _, p in ipairs (self.config.persistent or {}) do
     if p.profile_names then
-      for _, interest in ipairs(p.interests) do
-        if interest:matches(device_props) then
-          for _, pn in ipairs(p.profile_names) do
+      for _, interest in ipairs (p.interests) do
+        if interest:matches (device_props) then
+          for _, pn in ipairs (p.profile_names) do
             if pn == profile_name then
               return true
             end
@@ -44,9 +44,8 @@ function isProfilePersistent(device_props, profile_name)
   return false
 end
 
-
-function parseParam(param, id)
-  local parsed = param:parse()
+function parseParam (param, id)
+  local parsed = param:parse ()
   if parsed.pod_type == "Object" and parsed.object_id == id then
     return parsed.properties
   else
@@ -66,7 +65,7 @@ function setDeviceProfile (device, dev_id, dev_name, profile)
     index = profile.index,
   }
   Log.info ("Setting profile " .. profile.name .. " on " .. dev_name)
-  device:set_param("Profile", param)
+  device:set_param ("Profile", param)
 end
 
 function findDefaultProfile (device)
@@ -79,8 +78,8 @@ function findDefaultProfile (device)
     return nil
   end
 
-  for p in device:iterate_params("EnumProfile") do
-    local profile = parseParam(p, "EnumProfile")
+  for p in device:iterate_params ("EnumProfile") do
+    local profile = parseParam (p, "EnumProfile")
     if profile.name == def_name then
       return profile
     end
@@ -94,8 +93,8 @@ function findBestProfile (device)
   local best_profile = nil
   local unk_profile = nil
 
-  for p in device:iterate_params("EnumProfile") do
-    profile = parseParam(p, "EnumProfile")
+  for p in device:iterate_params ("EnumProfile") do
+    profile = parseParam (p, "EnumProfile")
     if profile and profile.name ~= "pro-audio" then
       if profile.name == "off" then
         off_profile = profile
@@ -134,7 +133,7 @@ function handleProfiles (device, new_device)
       isProfilePersistent (device.properties, self.active_profiles[dev_id].name) and
       def_profile ~= nil and
       self.active_profiles[dev_id].name == def_profile.name
-      then
+  then
     local active_profile = self.active_profiles[dev_id].name
     Log.info ("Device profile " .. active_profile .. " is persistent for " .. dev_name)
     return
@@ -174,14 +173,14 @@ self.om = ObjectManager {
   }
 }
 
-self.om:connect("object-added", function (_, device)
+self.om:connect ("object-added", function(_, device)
   device:connect ("params-changed", onDeviceParamsChanged)
   handleProfiles (device, true)
 end)
 
-self.om:connect("object-removed", function (_, device)
+self.om:connect ("object-removed", function(_, device)
   local dev_id = device["bound-id"]
   self.active_profiles[dev_id] = nil
 end)
 
-self.om:activate()
+self.om:activate ()
