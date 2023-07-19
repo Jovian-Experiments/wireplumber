@@ -21,3 +21,6 @@ load_script("intended-roles.lua")
 
 -- Automatically suspends idle nodes after 3 seconds
 load_script("suspend-node.lua")
+
+-- Automatically mutes alsa devices for 3 seconds if BT profile changes
+load_script("mute-alsa-device.lua")
