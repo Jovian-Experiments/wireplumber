@@ -63,12 +63,12 @@ default_policy.filters_metadata = {
   ["targets"] = {
     ["speakers"] = {
       ["media.class"] = "Audio/Sink",
-      ["alsa.card_name"] = "acp5x",
+      ["device.api"] = "alsa",
       ["device.profile.description"] = "Speaker",
     },
     ["microphone"] = {
       ["media.class"] = "Audio/Source",
-      ["alsa.card_name"] = "acp5x",
+      ["device.api"] = "alsa",
     }
   }
 }
