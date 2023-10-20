@@ -19,10 +19,10 @@ struct _WpSiAudioEndpoint
   WpSessionItem parent;
 
   /* configuration */
-  gchar name[96];
+  gchar name[256];
   gchar media_class[32];
   WpDirection direction;
-  gchar role[32];
+  gchar role[256];
   guint priority;
   gboolean disable_dsp;
 
@@ -232,9 +232,8 @@ si_audio_endpoint_enable_active (WpSessionItem *si, WpTransition *transition)
 {
   WpSiAudioEndpoint *self = WP_SI_AUDIO_ENDPOINT (si);
   g_autoptr (WpCore) core = wp_object_get_core (WP_OBJECT (self));
-  g_autofree gchar *name = g_strdup_printf ("control.%s", self->name);
-  g_autofree gchar *desc = g_strdup_printf ("%s %s Endpoint", self->role,
-      (self->direction == WP_DIRECTION_OUTPUT) ? "Capture" : "Playback");
+  g_autofree gchar *name = g_strdup_printf ("%s", self->name);
+  g_autofree gchar *desc = g_strdup_printf ("%s", self->role);
   g_autofree gchar *media = g_strdup_printf ("Audio/%s",
       (self->direction == WP_DIRECTION_OUTPUT) ? "Source" : "Sink");
 

@@ -84,7 +84,10 @@ function default_policy.enable()
   load_module("mixer-api")
 
   -- Create endpoints statically at startup
-  load_script("static-endpoints.lua", default_policy.endpoints)
+  -- load_script("static-endpoints.lua", default_policy.endpoints)
+
+  -- Create game endpoints when a game starts
+  load_module("game-endpoints-api")
 
   -- Create items for nodes that appear in the graph
   load_script("create-item.lua", default_policy.policy)
@@ -93,11 +96,11 @@ function default_policy.enable()
   load_script("policy-node.lua", default_policy.policy)
 
   -- Link client nodes with endpoints to make media flow in the graph
-  load_script("policy-endpoint-client.lua", default_policy.policy)
-  load_script("policy-endpoint-client-links.lua", default_policy.policy)
+  -- load_script("policy-endpoint-client.lua", default_policy.policy)
+  -- load_script("policy-endpoint-client-links.lua", default_policy.policy)
 
   -- Link endpoints with device nodes to make media flow in the graph
-  load_script("policy-endpoint-device.lua", default_policy.policy)
+  -- load_script("policy-endpoint-device.lua", default_policy.policy)
 
   -- Switch bluetooth profile based on media.role
   load_script("policy-bluetooth.lua", bluetooth_policy.policy)
