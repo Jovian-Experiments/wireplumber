@@ -19,6 +19,7 @@ self.pending_rescan = false
 self.events_skipped = false
 self.pending_error_timer = nil
 self.filters_api = Plugin.find("filters-api")
+self.game_endpoints_api = Plugin.find("game-endpoints-api")
 
 function rescan()
   for si in linkables_om:iterate() do
@@ -55,6 +56,7 @@ function createLink (si, si_target, passthrough, exclusive)
   local target_props = si_target.properties
   local si_id = si.id
 
+--[[
   -- break rescan if tried more than 5 times with same target
   if si_flags[si_id].failed_peer_id ~= nil and
       si_flags[si_id].failed_peer_id == si_target.id and
@@ -63,15 +65,28 @@ function createLink (si, si_target, passthrough, exclusive)
     Log.warning (si, "tried to link on last rescan, not retrying")
     return
   end
+--]]
 
-  if si_props["item.node.direction"] == "output" then
-    -- playback
-    out_item = si
-    in_item = si_target
+  if si_props["item.factory.name"] == "si-audio-endpoint" then
+    if si_props["item.node.direction"] == "output" then
+      -- capture
+      in_item = si
+      out_item = si_target
+    else
+      -- playback
+      out_item = si
+      in_item = si_target
+    end
   else
-    -- capture
-    in_item = si
-    out_item = si_target
+    if si_props["item.node.direction"] == "output" then
+      -- playback
+      out_item = si
+      in_item = si_target
+    else
+      -- capture
+      in_item = si
+      out_item = si_target
+    end
   end
 
   local passive = parseBool(si_props["node.passive"]) or
@@ -269,6 +284,12 @@ function canLink (properties, si_target)
 end
 
 function getTargetDirection(properties)
+  -- the target direction of endpoints is the same as its direction
+  if properties["item.factory.name"] == "si-audio-endpoint" then
+    return properties["item.node.direction"]
+  end
+
+  -- stream clients
   local target_direction = nil
   if properties["item.node.direction"] == "output" or
      (properties["item.node.direction"] == "input" and
@@ -293,12 +314,14 @@ end
 -- then use the node.target property that was set on the node
 -- `properties` must be the properties dictionary of the session item
 -- that is currently being handled
-function findDefinedTarget (properties)
+function findDefinedTarget (si, properties)
   local metadata = config.move and metadata_om:lookup()
   local target_direction = getTargetDirection(properties)
   local target_key
   local target_value
   local node_defined = false
+  local node = si:get_associated_proxy ("node")
+  local node_id = node["bound-id"]
 
   if properties["target.object"] ~= nil then
     target_value = properties["target.object"]
@@ -311,13 +334,13 @@ function findDefinedTarget (properties)
   end
 
   if metadata then
-    local id = metadata:find(properties["node.id"], "target.object")
+    local id = metadata:find(node_id, "target.object")
     if id ~= nil then
       target_value = id
       target_key = "object.serial"
       node_defined = false
     else
-      id = metadata:find(properties["node.id"], "target.node")
+      id = metadata:find(node_id, "target.node")
       if id ~= nil then
         target_value = id
         target_key = "node.id"
@@ -493,6 +516,12 @@ function findBestLinkable (si)
         tostring(si_target_props["node.name"]),
         tostring(si_target_node_id)))
 
+    -- Never link an endpoint with another endpoint
+    if si_props["item.factory.name"] == "si-audio-endpoint" and
+        si_target_props["item.factory.name"] == "si-audio-endpoint" then
+      goto skip_linkable
+    end
+
     -- Never use a filter as a best linkable if filters API is loaded
     if self.filters_api ~= nil and si_target_link_group ~= nil then
       goto skip_linkable
@@ -630,21 +659,24 @@ function checkFilter (si, handle_nonstreams)
 end
 
 function checkLinkable(si, handle_nonstreams)
-  -- only handle stream session items
+  -- make sure session item has properties
   local si_props = si.properties
-  if not si_props or (si_props["item.node.type"] ~= "stream"
-        and not handle_nonstreams)  then
+  if not si_props then
+    return false
+  end
+
+  -- always handle endpoints
+  if si_props["item.factory.name"] == "si-audio-endpoint" then
+    return true, si_props
+  end
+
+  -- only handle stream session items
+  if si_props["item.node.type"] ~= "stream" and not handle_nonstreams then
     return false
   end
 
   -- check filters
   if not checkFilter (si, handle_nonstreams) then
-    return false
-  end
-
-  -- Determine if we can handle item by this policy
-  if endpoints_om:get_n_objects () > 0 and
-      si_props["item.factory.name"] == "si-audio-adapter" then
     return false
   end
 
@@ -722,27 +754,49 @@ function checkFollowDefault (si, si_target, has_node_defined_target)
   end
 end
 
-function findFilterTarget (si)
+function findGameEndpointTarget (si)
+  -- always return nil if this is a filter
   local node = si:get_associated_proxy ("node")
-  local direction = getTargetDirection (si.properties)
   local link_group = node.properties["node.link-group"]
-  local target_id = -1
+  if link_group ~= nil then
+    return nil
+  end
 
+  -- always return nil if this is an endpoint
+  if si.properties["item.factory.name"] == "si-audio-endpoint" then
+    return nil
+  end
+
+  -- always return nil if application PID is not valid
+  local pid = node.properties["application.process.id"]
+  if pid == nil then
+    return nil
+  end
+
+  -- get the game endpoint
+  local direction = si.properties["item.node.direction"]
+  return self.game_endpoints_api:call ("get-game-endpoint", pid, direction)
+end
+
+function findFilterTarget (si)
   -- always return nil if filters API is not loaded
   if self.filters_api == nil then
     return nil
   end
 
+  -- always return nil if this is not a filter
+  local node = si:get_associated_proxy ("node")
+  local link_group = node.properties["node.link-group"]
   if link_group == nil then
-    -- if this is a client stream that is not a filter, link it to the highest
-    -- priority filter that does not have a group, if any.
-    target_id = self.filters_api:call("get-default-filter", direction)
-  else
-    -- if this is a filter, get its target
-    target_id = self.filters_api:call("get-filter-target",
-      direction, link_group)
+    return nil
   end
 
+  -- get the filter target
+  local direction = getTargetDirection (si.properties)
+  local target_id = self.filters_api:call("get-filter-target",
+      direction, link_group)
+
+  -- return nil if the filter has -1 target id (meaning default node)
   if (target_id == -1) then
     return nil
   end
@@ -782,14 +836,24 @@ function handleLinkable (si)
 
   -- find defined target
   local si_target, has_defined_target, has_node_defined_target
-      = findDefinedTarget(si_props)
+      = findDefinedTarget(si, si_props)
   local can_passthrough = si_target and canPassthrough(si, si_target)
   if si_target and si_must_passthrough and not can_passthrough then
     si_target = nil
   end
 
+  -- find endpoint target (always returns nil for filters or endpoints)
+  if si_target == nil and self.game_endpoints_api ~= nil then
+    si_target = findGameEndpointTarget (si)
+    local can_passthrough = si_target and canPassthrough(si, si_target)
+    if si_target and si_must_passthrough and not can_passthrough then
+      si_target = nil
+    end
+  end
+
   -- find filter target (always returns nil for non filters)
-  if si_target == nil then
+  if si_target == nil and
+      si_props["item.factory.name"] == "si-audio-adapter" then
     si_target = findFilterTarget(si)
     local can_passthrough = si_target and canPassthrough(si, si_target)
     if si_target and si_must_passthrough and not can_passthrough then
@@ -946,8 +1010,6 @@ metadata_om = ObjectManager {
   }
 }
 
-endpoints_om = ObjectManager { Interest { type = "SiEndpoint" } }
-
 clients_om = ObjectManager { Interest { type = "client" } }
 
 devices_om = ObjectManager { Interest { type = "device" } }
@@ -955,19 +1017,25 @@ devices_om = ObjectManager { Interest { type = "device" } }
 linkables_om = ObjectManager {
   Interest {
     type = "SiLinkable",
-    -- only handle si-audio-adapter and si-node
     Constraint { "item.factory.name", "c", "si-audio-adapter", "si-node" },
     Constraint { "active-features", "!", 0, type = "gobject" },
-  }
+  },
+  Interest {
+    type = "SiEndpoint",
+    Constraint { "active-features", "!", 0, type = "gobject" },
+  },
 }
 
 pending_linkables_om = ObjectManager {
   Interest {
     type = "SiLinkable",
-    -- only handle si-audio-adapter and si-node
     Constraint { "item.factory.name", "c", "si-audio-adapter", "si-node" },
     Constraint { "active-features", "=", 0, type = "gobject" },
-  }
+  },
+  Interest {
+    type = "SiEndpoint",
+    Constraint { "active-features", "=", 0, type = "gobject" },
+  },
 }
 
 links_om = ObjectManager {
@@ -1124,7 +1192,6 @@ devices_om:connect("object-added", function (om, device)
 end)
 
 metadata_om:activate()
-endpoints_om:activate()
 clients_om:activate()
 linkables_om:activate()
 pending_linkables_om:activate()
