@@ -723,34 +723,31 @@ function checkFollowDefault (si, si_target, has_node_defined_target)
 end
 
 function findFilterTarget (si)
-  local node = si:get_associated_proxy ("node")
-  local direction = getTargetDirection (si.properties)
-  local link_group = node.properties["node.link-group"]
-  local target_id = -1
-
   -- always return nil if filters API is not loaded
   if self.filters_api == nil then
-    return nil
+    return nil, false
   end
 
+  -- always return nil if this is not a filter
+  local node = si:get_associated_proxy ("node")
+  local link_group = node.properties["node.link-group"]
   if link_group == nil then
-    -- if this is a client stream that is not a filter, link it to the highest
-    -- priority filter that does not have a group, if any.
-    target_id = self.filters_api:call("get-default-filter", direction)
-  else
-    -- if this is a filter, get its target
-    target_id = self.filters_api:call("get-filter-target",
-      direction, link_group)
+    return nil, false
   end
 
-  if (target_id == -1) then
-    return nil
+  -- get the filter target
+  local direction = getTargetDirection (si.properties)
+  local target_json = self.filters_api:call("get-filter-target", direction, link_group)
+  if target_json == nil then
+    return nil, false
   end
+  target = target_json:parse()
 
-  Log.info (".. filter target ID is " .. tostring(target_id))
+  Log.info (".. filter target ID is " .. tostring(target.bound_id) ..
+      " (" .. tostring (target.exclusive) .. ")")
   return linkables_om:lookup {
-      Constraint { "node.id", "=", tostring(target_id) }
-  }
+      Constraint { "node.id", "=", tostring(target.bound_id) }
+  }, target.exclusive
 end
 
 function handleLinkable (si)
@@ -790,7 +787,11 @@ function handleLinkable (si)
 
   -- find filter target (always returns nil for non filters)
   if si_target == nil then
-    si_target = findFilterTarget(si)
+    si_target, exclusive = findFilterTarget(si)
+    -- don't fallback if filter target is not found and exclusive is true
+    if si_target == nil and exclusive then
+      return
+    end
     local can_passthrough = si_target and canPassthrough(si, si_target)
     if si_target and si_must_passthrough and not can_passthrough then
       si_target = nil

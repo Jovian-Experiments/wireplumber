@@ -34,10 +34,18 @@ default_policy.filters_metadata = {
 
     -- Output filters (meant to be linked with Audio/Source device nodes)
     {
+      ["stream-name"] = "virtual-bluetooth-source-in",  -- loopback bluetooth capture
+      ["node-name"] = "virtual-bluetooth-source-out",   -- loopback bluetooth source
+      ["direction"] = "output",  -- can only be 'input' or 'output'
+      ["target"] = "bluetooth-source",  -- if nil, the default node will be used as target
+      ["mode"] = "always",  -- can be 'always', 'never', 'playback-only' or 'capture-only'
+      ["priority"] = 30,
+    },
+    {
       ["stream-name"] = "input.virtual-source",  -- loopback capture
       ["node-name"] = "output.virtual-source",   -- loopback source
       ["direction"] = "output",  -- can only be 'input' or 'output'
-      ["target"] = nil,  -- if nil, the default node will be used as target
+      ["target"] = "microphone",  -- if nil, the default node will be used as target
       ["mode"] = "always",  -- can be 'always', 'never', 'playback-only' or 'capture-only'
       ["priority"] = 30,
     },
@@ -69,6 +77,13 @@ default_policy.filters_metadata = {
     ["microphone"] = {
       ["media.class"] = "Audio/Source",
       ["device.api"] = "alsa",
+    },
+    ["bluetooth-source"] = {
+      ["exclusive"] = true,
+      ["props"] = {
+        ["media.class"] = "Audio/Source",
+        ["device.api"] = "bluez5"
+      }
     }
   }
 }
