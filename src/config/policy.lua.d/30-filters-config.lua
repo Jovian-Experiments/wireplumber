@@ -70,13 +70,19 @@ default_policy.filters_metadata = {
   -- The target node properties (any node properties can be defined)
   ["targets"] = {
     ["speakers"] = {
-      ["media.class"] = "Audio/Sink",
-      ["device.api"] = "alsa",
-      ["device.profile.description"] = "Speaker",
+      ["exclusive"] = false,
+      ["props"] = {
+        ["media.class"] = "Audio/Sink",
+        ["device.api"] = "alsa",
+        ["device.profile.description"] = "Speaker",
+      }
     },
     ["microphone"] = {
-      ["media.class"] = "Audio/Source",
-      ["device.api"] = "alsa",
+      ["exclusive"] = false,
+      ["props"] = {
+        ["media.class"] = "Audio/Source",
+        ["device.api"] = "alsa",
+      }
     },
     ["bluetooth-source"] = {
       ["exclusive"] = true,
@@ -86,4 +92,4 @@ default_policy.filters_metadata = {
       }
     }
   }
-}
+
