@@ -74,6 +74,7 @@ default_policy.filters_metadata = {
       ["props"] = {
         ["media.class"] = "Audio/Sink",
         ["device.api"] = "alsa",
+        ["alsa.card_name"] = "sof-nau8821-max",
         ["device.profile.description"] = "Speaker",
       }
     },
