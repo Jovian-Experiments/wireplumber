@@ -26,6 +26,7 @@
 
 local config = ...
 local use_persistent_storage = config["use-persistent-storage"] or false
+local applications = {}
 local use_headset_profile = config["media-role.use-headset-profile"] or false
 local profile_restore_timeout_msec = 2000
 
@@ -39,6 +40,17 @@ local last_profiles = {}
 
 local active_streams = {}
 local previous_streams = {}
+
+for _, value in ipairs(config["media-role.applications"] or {}) do
+  applications[value] = true
+end
+
+metadata_om = ObjectManager {
+  Interest {
+    type = "metadata",
+    Constraint { "metadata.name", "=", "default" },
+  }
+}
 
 devices_om = ObjectManager {
   Interest {
@@ -55,16 +67,6 @@ streams_om = ObjectManager {
     Constraint { "stream.monitor", "!", "true" }
   }
 }
-
-nodes_om = ObjectManager {
-  Interest {
-    type = "node",
-    Constraint { "node.name", "=", "virtual-bluetooth-source-out", type = "pw-global" },
-    Constraint { "media.class", "matches", "Audio/Source", type = "pw-global" },
-  }
-}
-
-links_om = ObjectManager { Interest { type = "link" } }
 
 local function parseParam(param_to_parse, id)
   local param = param_to_parse:parse()
@@ -113,6 +115,19 @@ end
 
 local function isSwitched(device)
   return getSavedLastProfile(device) ~= nil
+end
+
+local function isBluez5AudioSink(sink_name)
+  if sink_name and string.find(sink_name, "bluez_output.") ~= nil then
+    return true
+  end
+  return false
+end
+
+local function isBluez5DefaultAudioSink()
+  local metadata = metadata_om:lookup()
+  local default_audio_sink = metadata:find(0, "default.audio.sink")
+  return isBluez5AudioSink(default_audio_sink)
 end
 
 local function findProfile(device, index, name)
@@ -213,6 +228,7 @@ local function switchProfile()
     end
 
     local cur_profile_name = getCurrentProfile(device)
+    saveLastProfile(device, cur_profile_name)
 
     _, index, name = findProfile(device, nil, cur_profile_name)
     if hasProfileInputRoute(device, index) then
@@ -235,8 +251,6 @@ local function switchProfile()
         index = index
       }
 
-      saveLastProfile(device, cur_profile_name)
-
       Log.info("Setting profile of '"
             .. device.properties["device.description"]
             .. "' from: " .. cur_profile_name
@@ -256,6 +270,8 @@ local function restoreProfile()
       local profile_name = getSavedLastProfile(device)
       local cur_profile_name = getCurrentProfile(device)
 
+      saveLastProfile(device, nil)
+
       if cur_profile_name then
         Log.info("Setting saved headset profile to: " .. cur_profile_name)
         saveHeadsetProfile(device, cur_profile_name)
@@ -269,8 +285,6 @@ local function restoreProfile()
             "Spa:Pod:Object:Param:Profile", "Profile",
             index = index
           }
-
-          saveLastProfile(device, nil)
 
           Log.info("Restoring profile of '"
                 .. device.properties["device.description"]
@@ -298,14 +312,18 @@ local function triggerRestoreProfile()
   end)
 end
 
-function parseBool(var)
-  return var and (var:lower() == "true" or var == "1")
-end
+-- We consider a Stream of interest to have role Communication if it has
+-- media.role set to Communication in props or it is in our list of
+-- applications as these applications do not set media.role correctly or at
+-- all.
+local function checkStreamStatus(stream)
+  local app_name = stream.properties["application.name"]
+  local stream_role = stream.properties["media.role"]
 
-local function checkStreamStatus (stream)
-  -- Ignore monitor streams
-  local is_monitor = parseBool (stream.properties["stream.monitor"])
-  if is_monitor then
+  if not (stream_role == "Communication" or applications[app_name]) then
+    return false
+  end
+  if not isBluez5DefaultAudioSink() then
     return false
   end
 
@@ -316,25 +334,7 @@ local function checkStreamStatus (stream)
     return false
   end
 
-  -- Make sure the virtual BT filter node exists
-  local node = nodes_om:lookup ()
-  if node == nil then
-    return false
-  end
-
-  -- Check if the stream is linked to the bluetooth loopback filter
-  local stream_id = tonumber(stream["bound-id"])
-  local bt_out_id = tonumber(node["bound-id"])
-  for l in links_om:iterate() do
-    local p = l.properties
-    local out_id = tonumber(p["link.output.node"])
-    local in_id = tonumber(p["link.input.node"])
-    if in_id == stream_id and out_id == bt_out_id then
-      return true
-    end
-  end
-
-  return false
+  return true
 end
 
 local function handleStream(stream)
@@ -361,47 +361,38 @@ local function handleAllStreams()
   end
 end
 
+streams_om:connect("object-added", function (_, stream)
+  stream:connect("state-changed", function (stream, old_state, cur_state)
+    handleStream(stream)
+  end)
+  stream:connect("params-changed", handleStream)
+  handleStream(stream)
+end)
+
+streams_om:connect("object-removed", function (_, stream)
+  active_streams[stream["bound-id"]] = nil
+  previous_streams[stream["bound-id"]] = nil
+  triggerRestoreProfile()
+end)
+
 devices_om:connect("object-added", function (_, device)
   -- Devices are unswitched initially
-  saveLastProfile(device, nil)
+  if isSwitched(device) then
+    saveLastProfile(device, nil)
+  end
   handleAllStreams()
 end)
 
-links_om:connect("object-added", function (_, link)
-  if handleAllStreams then
-    local p = link.properties
-    for stream in streams_om:iterate {
-      Constraint { "media.class", "matches", "Stream/Input/Audio", type = "pw-global" },
-      Constraint { "stream.monitor", "!", "true" }
-    } do
-      local in_id = tonumber(p["link.input.node"])
-      local stream_id = tonumber(stream["bound-id"])
-      if in_id == stream_id then
-        handleStream(stream)
-      end
+metadata_om:connect("object-added", function (_, metadata)
+  metadata:connect("changed", function (m, subject, key, t, value)
+    if (use_headset_profile and subject == 0 and key == "default.audio.sink"
+        and isBluez5AudioSink(value)) then
+      -- If bluez sink is set as default, rescan for active input streams
+      handleAllStreams()
     end
-  end
+  end)
 end)
 
-links_om:connect("object-removed", function (_, link)
-  if handleAllStreams then
-    local p = link.properties
-    for stream in streams_om:iterate {
-      Constraint { "media.class", "matches", "Stream/Input/Audio", type = "pw-global" },
-      Constraint { "stream.monitor", "!", "true" }
-    } do
-      local in_id = tonumber(p["link.input.node"])
-      local stream_id = tonumber(stream["bound-id"])
-      if in_id == stream_id then
-        active_streams[stream["bound-id"]] = nil
-        previous_streams[stream["bound-id"]] = nil
-        triggerRestoreProfile()
-      end
-    end
-  end
-end)
-
+metadata_om:activate()
 devices_om:activate()
 streams_om:activate()
-nodes_om:activate()
-links_om:activate()

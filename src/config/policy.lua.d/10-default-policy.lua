@@ -33,6 +33,16 @@ bluetooth_policy.policy = {
 
   -- Whether to use headset profile in the presence of an input stream.
   ["media-role.use-headset-profile"] = true,
+
+  -- Application names correspond to application.name in stream properties.
+  -- Applications which do not set media.role but which should be considered
+  -- for role based profile switching can be specified here.
+  ["media-role.applications"] = {
+    "Firefox", "Chromium input", "Google Chrome input", "Brave input",
+    "Microsoft Edge input", "Vivaldi input", "ZOOM VoiceEngine",
+    "Telegram Desktop", "telegram-desktop", "linphone", "Mumble",
+    "WEBRTC VoiceEngine", "Skype", "Firefox Developer Edition",
+  },
 }
 
 function default_policy.enable()
