@@ -849,7 +849,11 @@ function handleLinkable (si)
 
   -- if the stream has dont-reconnect and was already linked before,
   -- don't link it to a new target
-  if not reconnect and si_flags[si.id].was_handled then
+  if not reconnect and
+      si_flags[si.id].was_handled and
+      si_target ~= nil and
+      si_flags[si.id].peer_id ~= nil and
+      si_flags[si.id].peer_id ~= si_target.id then
     si_target = nil
   end
 
