@@ -57,11 +57,38 @@ function getPermissions (properties)
   return nil, nil
 end
 
-clients_om = ObjectManager {
-  Interest { type = "client" }
-}
+function updateObjectDefinedPermissions (client, properties, perms_table)
+  if config.rules then
+    local client_id = client["bound-id"]
 
-clients_om:connect("object-added", function (om, client)
+    -- update perms_table with the permissions of each pipewire object
+    JsonUtils.match_rules (config.rules, properties, function (action, value)
+      if action == "update-perms" then
+        for po in po_om:iterate () do
+          local po_id = po["bound-id"]
+
+	  -- make sure the pipewire object is not the client itself
+	  if client_id ~= po_id then
+            local po_properties = po["properties"]
+            JsonUtils.match_rules (value, po_properties, function (po_action, po_value)
+              if po_action == "permissions" then
+                log:info (client, "Granting permissions to client " .. client_id ..
+                    " on object " .. po_id .. " to '" .. po_value:parse() .. "'")
+                perms_table[po_id] = po_value:parse()
+              end
+
+              return true
+            end)
+          end
+        end
+      end
+
+      return true
+    end)
+  end
+end
+
+function handleClient (client)
   local id = client["bound-id"]
   local properties = client["properties"]
   local access = getAccess (properties)
@@ -77,13 +104,27 @@ clients_om:connect("object-added", function (om, client)
   end
 
   if perms ~= nil then
-    log:info(client, "Granting permissions to client " .. id .. " (access " ..
+    log:info(client, "Granting default permissions to client " .. id .. " (access " ..
       effective_access .. "): " .. perms)
-    client:update_permissions { ["any"] = perms }
+
+    local perms_table = { ["any"] = perms }
+    updateObjectDefinedPermissions (client, properties, perms_table)
+
+    client:update_permissions (perms_table)
     client:update_properties { ["pipewire.access.effective"] = effective_access }
   else
     log:debug(client, "No rule for client " .. id .. " (access " .. access .. ")")
   end
+end
+
+po_om = ObjectManager {
+  Interest { type = "PipewireObject" }
+}
+
+po_om:connect("objects-changed", function (om)
+  for client in om:iterate { type = "client" } do
+    handleClient (client)
+  end
 end)
 
-clients_om:activate()
+po_om:activate()
