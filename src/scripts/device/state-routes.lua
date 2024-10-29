@@ -232,7 +232,7 @@ store_or_restore_routes_hook = SimpleEventHook {
             Json.Object { index = route_info.index }:to_string ()
         push_select_routes = true
 
-      elseif route.save and route.props then
+      elseif route.save and route.props and route.available ~= "no" then
         -- just save route properties
         log:info (device,
             string.format ("storing route(%s) props of device(%s)",
