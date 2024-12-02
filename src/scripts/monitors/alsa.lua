@@ -73,6 +73,7 @@ function CreateLoopback (properties)
   device_props = Json.Object {
     ["node.name"] = string.format ("alsa_loopback_device.%s", name),
     ["node.description"] = desc,
+    ["node.virtual"] = false,
     ["media.class"] = device_media_class,
     ["audio.channels"] = channels,
     ["audio.position"] = position,
